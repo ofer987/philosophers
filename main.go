@@ -13,6 +13,7 @@ var eating = 0
 var eatingMutex sync.Mutex
 
 type philosopher struct {
+	i         int
 	leftFork  *fork
 	rightFork *fork
 	isEating  bool
@@ -21,6 +22,7 @@ type philosopher struct {
 type fork struct {
 	mut        *sync.Mutex
 	isPickedUp bool
+	phil       *philosopher
 }
 
 const FORK_COUNT = PHILOSOPHER_COUNT + 1
@@ -38,16 +40,20 @@ func main() {
 			mut:        &mut,
 			isPickedUp: false,
 		}
+
+		i += 1
 	}
 
 	// Create Philosophers
 	i = 0
 	for i < PHILOSOPHER_COUNT {
 		philosophers[i] = philosopher{
+			i:         i + 1,
 			leftFork:  &forks[i],
 			rightFork: &forks[i+1],
 			isEating:  false,
 		}
+
 		i += 1
 	}
 
@@ -60,23 +66,18 @@ func main() {
 		<-ticker.C
 
 		dropAllForks()
-		startEating()
 	}
-
-	fmt.Println("vim-go")
 }
 
-func incrementEating() {
-	eatingMutex.Lock()
-	defer eatingMutex.Unlock()
-
-	eating += 1
-}
-
-func (f *fork) pickUp() {
+func (f *fork) pickUp(phil *philosopher) {
 	f.mut.Lock()
 	defer f.mut.Unlock()
 
+	if f.isPickedUp {
+		return
+	}
+
+	f.phil = phil
 	f.isPickedUp = true
 }
 
@@ -85,12 +86,20 @@ func (f *fork) drop() {
 	defer f.mut.Unlock()
 
 	f.isPickedUp = false
+	f.phil = nil
 }
 
 func startEating() {
+	eatingMutex.Lock()
+	defer eatingMutex.Unlock()
+
+	fmt.Printf("Start dining\n")
+
 	i := 0
 	for i < PHILOSOPHER_COUNT {
 		go philosophers[i].startToEat()
+
+		i += 1
 	}
 }
 
@@ -99,14 +108,24 @@ func (phil *philosopher) startToEat() {
 		return
 	}
 
-	phil.leftFork.pickUp()
-	phil.rightFork.pickUp()
+	phil.leftFork.pickUp(phil)
+	phil.rightFork.pickUp(phil)
 
-	if phil.leftFork.isPickedUp && phil.rightFork.isPickedUp {
-		phil.isEating = true
+	if phil.leftFork.isPickedUp && phil.leftFork.phil == phil && phil.rightFork.isPickedUp && phil.rightFork.phil == phil {
+		fmt.Printf("Philosopher %d is eating\n", phil.i)
+
+		incrementEating(phil)
+
+		phil.stopEating()
 	}
+}
 
-	phil.stopEating()
+func incrementEating(phil *philosopher) {
+	eatingMutex.Lock()
+	defer eatingMutex.Unlock()
+
+	phil.isEating = true
+	eating += 1
 }
 
 func (phil *philosopher) stopEating() {
@@ -118,6 +137,8 @@ func (phil *philosopher) stopEating() {
 		<-ticker.C
 
 		phil.isEating = false
+		fmt.Printf("Philosopher %d has stopped eating\n", phil.i)
+
 		phil.leftFork.drop()
 		phil.rightFork.drop()
 		break
@@ -132,9 +153,13 @@ func dropAllForks() {
 		return
 	}
 
+	fmt.Printf("START: Drop all the forks because there is a deadlock!\n")
 	i := 0
 	for i < FORK_COUNT {
-		forks[i].mut.Unlock()
-		forks[i].isPickedUp = false
+		forks[i].drop()
+
+		i += 1
 	}
+
+	fmt.Printf("END: Drop all the forks because there is a deadlock!\n")
 }
