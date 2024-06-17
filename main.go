@@ -59,9 +59,7 @@ func main() {
 		i += 1
 	}
 
-	fmt.Println(3)
 	startEating()
-
 	for {
 		duration := 6 * time.Second
 		ticker := time.NewTicker(duration)
