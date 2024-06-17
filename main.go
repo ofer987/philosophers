@@ -25,7 +25,7 @@ type fork struct {
 	phil       *philosopher
 }
 
-const FORK_COUNT = PHILOSOPHER_COUNT + 1
+const FORK_COUNT = PHILOSOPHER_COUNT
 
 var forks = [FORK_COUNT]fork{}
 var philosophers = [PHILOSOPHER_COUNT]philosopher{}
@@ -47,20 +47,23 @@ func main() {
 	// Create Philosophers
 	i = 0
 	for i < PHILOSOPHER_COUNT {
+		leftForkIndex := i
+		rightForkIndex := (i + 1) % 5
 		philosophers[i] = philosopher{
 			i:         i + 1,
-			leftFork:  &forks[i],
-			rightFork: &forks[i+1],
+			leftFork:  &forks[leftForkIndex],
+			rightFork: &forks[rightForkIndex],
 			isEating:  false,
 		}
 
 		i += 1
 	}
 
-	for {
-		go startEating()
-		duration := 6 * time.Second
+	fmt.Println(3)
+	startEating()
 
+	for {
+		duration := 6 * time.Second
 		ticker := time.NewTicker(duration)
 
 		<-ticker.C
@@ -104,19 +107,19 @@ func startEating() {
 }
 
 func (phil *philosopher) startToEat() {
-	if phil.isEating {
-		return
-	}
+	for {
+		if phil.isEating {
+			continue
+		}
 
-	phil.leftFork.pickUp(phil)
-	phil.rightFork.pickUp(phil)
+		phil.leftFork.pickUp(phil)
+		phil.rightFork.pickUp(phil)
 
-	if phil.leftFork.isPickedUp && phil.leftFork.phil == phil && phil.rightFork.isPickedUp && phil.rightFork.phil == phil {
-		fmt.Printf("Philosopher %d is eating\n", phil.i)
+		if phil.leftFork.isPickedUp && phil.leftFork.phil == phil && phil.rightFork.isPickedUp && phil.rightFork.phil == phil {
+			incrementEating(phil)
 
-		incrementEating(phil)
-
-		phil.stopEating()
+			phil.stopEating()
+		}
 	}
 }
 
@@ -126,6 +129,24 @@ func incrementEating(phil *philosopher) {
 
 	phil.isEating = true
 	eating += 1
+
+	i := 0
+	eatingCount := 0
+
+	fmt.Println("")
+	fmt.Printf("A total of %d philosopher are supposed to be eating\n", eating)
+	for i < PHILOSOPHER_COUNT {
+		philOther := philosophers[i]
+		if philOther.isEating {
+			fmt.Printf("Philosopher %d is eating\n", philOther.i)
+
+			eatingCount += 1
+		}
+
+		i += 1
+	}
+
+	fmt.Printf("A total of %d philosopher are eating\n\n", eatingCount)
 }
 
 func (phil *philosopher) stopEating() {
@@ -136,11 +157,16 @@ func (phil *philosopher) stopEating() {
 	for {
 		<-ticker.C
 
+		eatingMutex.Lock()
+		defer eatingMutex.Unlock()
+
+		eating -= 1
 		phil.isEating = false
 		fmt.Printf("Philosopher %d has stopped eating\n", phil.i)
 
 		phil.leftFork.drop()
 		phil.rightFork.drop()
+
 		break
 	}
 }
